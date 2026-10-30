@@ -1,0 +1,119 @@
+import xlsx from 'xlsx';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const rulesPath = path.join(__dirname, '../config/rules.json');
+const rulesJSON = JSON.parse(fs.readFileSync(rulesPath, 'utf-8'));
+
+const motorDeReglas = rulesJSON.reglas_diagnostico.map(regla => ({
+    ...regla,
+    evaluar: new Function('row', `return ${regla.condicion};`)
+}));
+
+export const processReport = (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: "Por favor, adjunta un archivo de reporte." });
+        }
+
+        const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
+        
+        let informacionVehiculo = {};
+        const diagnosticoPorHoja = [];
+        const todasLasAlertas = [];
+
+        workbook.SheetNames.forEach(sheetName => {
+            const worksheet = workbook.Sheets[sheetName];
+
+            //Extraer datos del vehículo desde la hoja de 'Información'
+            if (sheetName.toLowerCase().includes('informaci')) {
+                // Leemos como arreglo de arreglos para mapear Columna A y Columna B fácilmente
+                const rawInfo = xlsx.utils.sheet_to_json(worksheet, { header: 1 });
+                rawInfo.forEach(fila => {
+                    // Si la fila tiene al menos 2 columnas (Clave y Valor) y no están vacías
+                    if (fila.length >= 2 && fila[0] && fila[1]) {
+                        informacionVehiculo[fila[0].trim()] = fila[1];
+                    }
+                });
+                return; // Terminamos con esta hoja
+            }
+
+            //Extraer telemetría de las hojas de Recorrido
+            const data = xlsx.utils.sheet_to_json(worksheet, { defval: null });
+            if (data.length === 0) return;
+
+            const alertasDeHoja = [];
+            let registrosEvaluados = 0;
+
+            data.forEach((row, index) => {
+                const filaExcel = index + 2; 
+                registrosEvaluados++;
+
+                motorDeReglas.forEach(regla => {
+                    try {
+                        if (regla.evaluar(row)) {
+                            const alerta = {
+                                filaExcel: filaExcel,
+                                fechaYHora: `${row['Fecha'] || 'N/A'} ${row['Hora'] || 'N/A'}`,
+                                errorDetectado: regla.nombre,
+                                severidad: regla.severidad,
+                                sugerencia: regla.sugerencia
+                            };
+                            alertasDeHoja.push(alerta);
+                            todasLasAlertas.push(alerta); // Agregamos al consolidador general
+                        }
+                    } catch (err) {}
+                });
+            });
+
+            diagnosticoPorHoja.push({
+                hojaAnalizada: sheetName,
+                totalRegistrosEvaluados: registrosEvaluados,
+                incidenciasEncontradas: alertasDeHoja.length,
+                alertas: alertasDeHoja
+            });
+        });
+
+        // Evaluar Nivel de Urgencia basado en la severidad máxima encontrada
+        let nivelUrgencia = "NINGUNA - Vehículo Óptimo";
+        const severidadesEncontradas = todasLasAlertas.map(a => a.severidad.toLowerCase());
+
+        if (severidadesEncontradas.includes('crítica')) {
+            nivelUrgencia = "ALTA / INMEDIATA (Riesgo de pérdida de rastreo)";
+        } else if (severidadesEncontradas.includes('alta')) {
+            nivelUrgencia = "MEDIA (Programar chequeo preventivo)";
+        } else if (severidadesEncontradas.includes('media') || severidadesEncontradas.includes('baja')) {
+            nivelUrgencia = "BAJA (Revisión de rutina)";
+        }
+
+        //Agrupar causas raíz
+        const causasRaiz = [...new Set(todasLasAlertas.map(a => a.sugerencia))];
+
+        //Informe Profesional
+        return res.json({
+            estado: "Diagnóstico completado",
+            informeProfesional: {
+                vehiculo: {
+                    nombre: informacionVehiculo['Nombre'] || "Desconocido",
+                    placas: informacionVehiculo['Placas'] || "Desconocidas",
+                    grupo: informacionVehiculo['Grupo'] || "N/A",
+                    detallesTecnicos: informacionVehiculo
+                },
+                resumenEjecutivo: {
+                    totalIncidencias: todasLasAlertas.length,
+                    nivelUrgencia: nivelUrgencia,
+                    causasRaizSugeridas: causasRaiz
+                }
+            },
+            detallesTecnicos: diagnosticoPorHoja
+        });
+
+    } catch (error) {
+        console.error("Error procesando el archivo:", error);
+        return res.status(500).json({ error: "Error interno al procesar el diagnóstico." });
+    }
+};

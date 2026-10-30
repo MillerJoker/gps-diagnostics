@@ -1,0 +1,32 @@
+{
+  "reglas_diagnostico": [
+    {
+      "id": "ERR_IGNICION",
+      "nombre": "Inconsistencia de Ignición",
+      "condicion": "Number(row['Velocidad'] || 0) > 5 && row['Motor'] === 'Apagado'",
+      "sugerencia": "Revisar cable de ignición (ACC).",
+      "severidad": "Alta"
+    },
+    {
+      "id": "ERR_BATERIA_DESCONECTADA",
+      "nombre": "Corte de Energía Principal",
+      "condicion": "row['Bateria Vehic'] === '-' || !row['Bateria Vehic']",
+      "sugerencia": "Revisar conexión a la batería del vehículo y porta-fusibles.",
+      "severidad": "Crítica"
+    },
+    {
+      "id": "ERR_BATERIA_BAJA",
+      "nombre": "Batería Interna Agotada",
+      "condicion": "String(row['Estado'] || '').includes('Bateria Baja')",
+      "sugerencia": "Reemplazar batería de respaldo del módulo GPS.",
+      "severidad": "Media"
+    },
+    {
+      "id": "ERR_PERDIDA_SENAL",
+      "nombre": "Pérdida de Transmisión (Puntos Guardados)",
+      "condicion": "row['GPS'] === 'Guardado'",
+      "sugerencia": "Revisar SIM card o ubicación de la antena.",
+      "severidad": "Baja"
+    }
+  ]
+}

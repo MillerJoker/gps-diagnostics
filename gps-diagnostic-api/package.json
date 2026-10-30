@@ -1,0 +1,26 @@
+{
+  "name": "gps-diagnostic-api",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/index.js",
+  "type":"module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.33.2",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "multer": "^2.4.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "dotenv": "^18.0.3",
+    "nodemon": "^3.1.14"
+  }
+}
