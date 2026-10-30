@@ -14,6 +14,27 @@ const motorDeReglas = rulesJSON.reglas_diagnostico.map(regla => ({
     evaluar: new Function('row', `return ${regla.condicion};`)
 }));
 
+const sanitizarFila = (row) => {
+    const rowClean = { ...row };
+    
+    if (rowClean['Bateria Vehiculo'] && typeof rowClean['Bateria Vehiculo'] === 'string') {
+        const valClean = rowClean['Bateria Vehiculo'].replace('V', '').trim();
+        rowClean['Bateria Vehiculo_Num'] = valClean === '-' || valClean === '' ? null : Number(valClean);
+    }
+
+    const campoVoltaje = rowClean['Bateria Vehiculo'] || rowClean['Voltaje Bateria'] || rowClean['Bateria'];
+    
+    if (campoVoltaje && typeof campoVoltaje === 'string') {
+        const valClean = campoVoltaje.replace('V', '').trim();
+        const num = parseFloat(valClean);
+        rowClean['Voltaje_Parseado'] = (valClean === '-' || valClean === '' || isNaN(num)) ? 0 : num;
+    } else {
+        rowClean['Voltaje_Parseado'] = Number(campoVoltaje) || 0;
+    }
+
+    return rowClean;
+};
+
 export const processReport = (req, res) => {
     try {
         if (!req.file) {
@@ -29,20 +50,18 @@ export const processReport = (req, res) => {
         workbook.SheetNames.forEach(sheetName => {
             const worksheet = workbook.Sheets[sheetName];
 
-            //Extraer datos del vehículo desde la hoja de 'Información'
+            // Extraer datos del vehículo desde la hoja de Información
             if (sheetName.toLowerCase().includes('informaci')) {
-                // Leemos como arreglo de arreglos para mapear Columna A y Columna B fácilmente
                 const rawInfo = xlsx.utils.sheet_to_json(worksheet, { header: 1 });
                 rawInfo.forEach(fila => {
-                    // Si la fila tiene al menos 2 columnas (Clave y Valor) y no están vacías
                     if (fila.length >= 2 && fila[0] && fila[1]) {
                         informacionVehiculo[fila[0].trim()] = fila[1];
                     }
                 });
-                return; // Terminamos con esta hoja
+                return; 
             }
 
-            //Extraer telemetría de las hojas de Recorrido
+            // Extraer telemetría de las hojas de Recorrido
             const data = xlsx.utils.sheet_to_json(worksheet, { defval: null });
             if (data.length === 0) return;
 
@@ -53,9 +72,12 @@ export const processReport = (req, res) => {
                 const filaExcel = index + 2; 
                 registrosEvaluados++;
 
+                const rowSanitizada = sanitizarFila(row);
+
                 motorDeReglas.forEach(regla => {
                     try {
-                        if (regla.evaluar(row)) {
+                        // Evaluamos pasando la fila limpia
+                        if (regla.evaluar(rowSanitizada)) {
                             const alerta = {
                                 filaExcel: filaExcel,
                                 fechaYHora: `${row['Fecha'] || 'N/A'} ${row['Hora'] || 'N/A'}`,
@@ -64,7 +86,7 @@ export const processReport = (req, res) => {
                                 sugerencia: regla.sugerencia
                             };
                             alertasDeHoja.push(alerta);
-                            todasLasAlertas.push(alerta); // Agregamos al consolidador general
+                            todasLasAlertas.push(alerta);
                         }
                     } catch (err) {}
                 });
@@ -90,10 +112,8 @@ export const processReport = (req, res) => {
             nivelUrgencia = "BAJA (Revisión de rutina)";
         }
 
-        //Agrupar causas raíz
         const causasRaiz = [...new Set(todasLasAlertas.map(a => a.sugerencia))];
 
-        //Informe Profesional
         return res.json({
             estado: "Diagnóstico completado",
             informeProfesional: {

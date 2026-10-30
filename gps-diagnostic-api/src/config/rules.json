@@ -10,7 +10,7 @@
     {
       "id": "ERR_BATERIA_DESCONECTADA",
       "nombre": "Corte de Energía Principal",
-      "condicion": "row['Bateria Vehic'] === '-' || !row['Bateria Vehic']",
+      "condicion": "row['Bateria Vehiculo'] === '-' || !row['Bateria Vehiculo']",
       "sugerencia": "Revisar conexión a la batería del vehículo y porta-fusibles.",
       "severidad": "Crítica"
     },
@@ -27,6 +27,27 @@
       "condicion": "row['GPS'] === 'Guardado'",
       "sugerencia": "Revisar SIM card o ubicación de la antena.",
       "severidad": "Baja"
+    },
+    {
+      "id": "ERR_CANDADO_CARGANDO",
+      "nombre": "Candado en Proceso de Carga",
+      "condicion": "Number(row['Voltaje_Parseado'] || 0) > 13.5",
+      "sugerencia": "El candado se encuentra conectado a la fuente de alimentación para carga.",
+      "severidad": "Baja"
+    },
+    {
+      "id": "ERR_CANDADO_VOLTAJE_BAJO",
+      "nombre": "Voltaje Óptimo de Candado Deficiente",
+      "condicion": "Number(row['Voltaje_Parseado'] || 0) > 0 && Number(row['Voltaje_Parseado'] || 0) < 12.6",
+      "sugerencia": "Candado requiriendo carga urgente (Voltaje menor al rango óptimo de 12.6V - 13.5V).",
+      "severidad": "Alta"
+    },
+    {
+      "id": "ERR_TEMPERATURA_EXTREMA",
+      "nombre": "Temperatura Fuera de Rango (Candado/Dispositivo)",
+      "condicion": "Number(row['Temperatura'] || 0) < -10 || Number(row['Temperatura'] || 0) > 60",
+      "sugerencia": "Revisar entorno térmico del dispositivo (Temperatura extremadamente alta o baja).",
+      "severidad": "Crítica"
     }
   ]
 }
