@@ -44,13 +44,9 @@ export const processReport = (req, res) => {
         const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
         
         let informacionVehiculo = {};
-        const diagnosticoPorHoja = [];
-        const todasLasAlertas = [];
 
         workbook.SheetNames.forEach(sheetName => {
             const worksheet = workbook.Sheets[sheetName];
-
-            // Extraer datos del vehículo desde la hoja de Información
             if (sheetName.toLowerCase().includes('informaci')) {
                 const rawInfo = xlsx.utils.sheet_to_json(worksheet, { header: 1 });
                 rawInfo.forEach(fila => {
@@ -58,10 +54,27 @@ export const processReport = (req, res) => {
                         informacionVehiculo[fila[0].trim()] = fila[1];
                     }
                 });
-                return; 
             }
+        });
 
-            // Extraer telemetría de las hojas de Recorrido
+        const nombreDispositivo = (informacionVehiculo['Nombre'] || '').toLowerCase();
+        const esCandado = nombreDispositivo.includes('candado') || nombreDispositivo.includes('can');
+
+        const reglasAplicables = motorDeReglas.filter(regla => {
+            if (regla.exclusivoCandado && !esCandado) {
+                return false; // Si es un vehículo normal, ignoramos las reglas de candado
+            }
+            return true;
+        });
+
+        const diagnosticoPorHoja = [];
+        const todasLasAlertas = [];
+
+        //Procesamos las hojas de Recorrido de manera limpia
+        workbook.SheetNames.forEach(sheetName => {
+            if (sheetName.toLowerCase().includes('informaci')) return; // Saltamos la de info
+
+            const worksheet = workbook.Sheets[sheetName];
             const data = xlsx.utils.sheet_to_json(worksheet, { defval: null });
             if (data.length === 0) return;
 
@@ -74,9 +87,8 @@ export const processReport = (req, res) => {
 
                 const rowSanitizada = sanitizarFila(row);
 
-                motorDeReglas.forEach(regla => {
+                reglasAplicables.forEach(regla => {
                     try {
-                        // Evaluamos pasando la fila limpia
                         if (regla.evaluar(rowSanitizada)) {
                             const alerta = {
                                 filaExcel: filaExcel,
